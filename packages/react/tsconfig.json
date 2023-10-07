@@ -18,7 +18,10 @@
     "declaration": true,
     "declarationDir": "types",
     "composite": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@blocknote/core": ["../core/src"]
+    }
   },
   "include": ["src"],
   "references": [

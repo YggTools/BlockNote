@@ -1,6 +1,6 @@
 {
-  "name": "@blocknote/core",
-  "homepage": "https://github.com/TypeCellOS/BlockNote",
+  "name": "@ygg.tools/blocknote-core",
+  "homepage": "https://github.com/YggTools/BlockNote",
   "private": false,
   "license": "MPL-2.0",
   "version": "0.9.4",
@@ -22,7 +22,7 @@
     "block-based",
     "tiptap"
   ],
-  "description": "A \"Notion-style\" block-based extensible text editor built on top of Prosemirror and Tiptap.",
+  "description": "Ygg.tools soft-fork of @blocknote/core: A \"Notion-style\" block-based extensible text editor built on top of Prosemirror and Tiptap.",
   "type": "module",
   "source": "src/index.ts",
   "types": "./types/src/index.d.ts",
@@ -107,7 +107,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.ygg.tools/"
   },
-  "gitHead": "37614ab348dcc7faa830a9a88437b37197a2162d"
+  "gitHead": "57c86e896c2ff4ea252d6f4c2b0421360d69aa21"
 }

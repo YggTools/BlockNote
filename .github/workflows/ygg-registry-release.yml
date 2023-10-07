@@ -1,0 +1,21 @@
+name: Release on registry.ygg.tools
+on: [push]
+
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+
+jobs:
+  Release-on-Registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18.x"
+      - name: Install dependencies
+        run: npm install
+      - name: Release to the registry
+        run: |-
+          echo '//registry.ygg.tools/:_authToken="${NODE_AUTH_TOKEN}"' >> .npmrc
+          npm run release:ci
