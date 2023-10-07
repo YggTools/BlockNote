@@ -1,4 +1,4 @@
-import { Extensions, extensions } from "@tiptap/core";
+import { Extensions, extensions, Extension } from "@tiptap/core";
 
 import { BlockNoteEditor } from "./BlockNoteEditor";
 
@@ -33,10 +33,7 @@ import { TextColorMark } from "./extensions/TextColor/TextColorMark";
 import { TrailingNode } from "./extensions/TrailingNode/TrailingNodeExtension";
 import UniqueID from "./extensions/UniqueID/UniqueID";
 
-/**
- * Get all the Tiptap extensions BlockNote is configured with by default
- */
-export const getBlockNoteExtensions = <BSchema extends BlockSchema>(opts: {
+export interface GetExtensionsOptions<BSchema extends BlockSchema> {
   editor: BlockNoteEditor<BSchema>;
   domAttributes: Partial<BlockNoteDOMAttributes>;
   blockSchema: BSchema;
@@ -49,71 +46,117 @@ export const getBlockNoteExtensions = <BSchema extends BlockSchema>(opts: {
     provider: any;
     renderCursor?: (user: any) => HTMLElement;
   };
-}) => {
-  const ret: Extensions = [
-    extensions.ClipboardTextSerializer,
-    extensions.Commands,
-    extensions.Editable,
-    extensions.FocusEvents,
-    extensions.Tabindex,
+}
 
-    // DevTools,
-    Gapcursor,
+export interface BlockNoteExtensionGroup {
+  group: string; // not using `name` to avoid confusion with $extension.name
+  required: boolean;
+  extensions: Extensions;
+}
 
-    // DropCursor,
-    Placeholder.configure({
-      emptyNodeClass: blockStyles.isEmpty,
-      hasAnchorClass: blockStyles.hasAnchor,
-      isFilterClass: blockStyles.isFilter,
-      includeChildren: true,
-      showOnlyCurrent: false,
-    }),
-    UniqueID.configure({
-      types: ["blockContainer"],
-    }),
-    HardBreak,
-    // Comments,
-
-    // basics:
-    Text,
-
-    // marks:
-    Bold,
-    Code,
-    Italic,
-    Strike,
-    Underline,
-    Link,
-    TextColorMark,
-    TextColorExtension,
-    BackgroundColorMark,
-    BackgroundColorExtension,
-    TextAlignmentExtension,
-
-    // nodes
-    Doc,
-    BlockContainer.configure({
-      domAttributes: opts.domAttributes,
-    }),
-    BlockGroup.configure({
-      domAttributes: opts.domAttributes,
-    }),
-    ...Object.values(opts.blockSchema).map((blockSpec) =>
-      blockSpec.node.configure({
-        editor: opts.editor,
-        domAttributes: opts.domAttributes,
-      })
-    ),
-    CustomBlockSerializerExtension,
-
-    Dropcursor.configure({ width: 5, color: "#ddeeff" }),
-    // This needs to be at the bottom of this list, because Key events (such as enter, when selecting a /command),
-    // should be handled before Enter handlers in other components like splitListItem
-    TrailingNode,
+/**
+ * Get all the Tiptap extensions BlockNote is configured with by default, split into rough groups.
+ */
+export const getBlockNoteExtensionGroups = <BSchema extends BlockSchema>(
+  opts: GetExtensionsOptions<BSchema>
+) => {
+  const ret: BlockNoteExtensionGroup[] = [
+    {
+      group: "Core",
+      required: true,
+      extensions: [
+        extensions.ClipboardTextSerializer,
+        extensions.Commands,
+        extensions.Editable,
+        extensions.FocusEvents,
+        extensions.Tabindex,
+      ],
+    },
+    {
+      group: "DevTools",
+      required: true, // ?
+      extensions: [Gapcursor],
+    },
+    {
+      group: "DropCursor",
+      required: true,
+      extensions: [
+        Placeholder.configure({
+          emptyNodeClass: blockStyles.isEmpty,
+          hasAnchorClass: blockStyles.hasAnchor,
+          isFilterClass: blockStyles.isFilter,
+          includeChildren: true,
+          showOnlyCurrent: false,
+        }),
+        UniqueID.configure({
+          types: ["blockContainer"],
+        }),
+        HardBreak,
+        // Comments,
+      ],
+    },
+    {
+      group: "Basics",
+      required: true,
+      extensions: [Text],
+    },
+    {
+      group: "Marks",
+      required: false,
+      extensions: [
+        Bold,
+        Code,
+        Italic,
+        Strike,
+        Underline,
+        Link,
+        TextColorMark,
+        TextColorExtension,
+        BackgroundColorMark,
+        BackgroundColorExtension,
+        TextAlignmentExtension,
+      ],
+    },
+    {
+      group: "Nodes",
+      required: true,
+      extensions: [
+        Doc,
+        BlockContainer.configure({
+          domAttributes: opts.domAttributes,
+        }),
+        BlockGroup.configure({
+          domAttributes: opts.domAttributes,
+        }),
+        ...Object.values(opts.blockSchema).map((blockSpec) =>
+          blockSpec.node.configure({
+            editor: opts.editor,
+            domAttributes: opts.domAttributes,
+          })
+        ),
+        CustomBlockSerializerExtension,
+      ],
+    },
+    {
+      group: "Core", // note that we have *two* core groups!
+      required: true,
+      extensions: [
+        Dropcursor.configure({ width: 5, color: "#ddeeff" }),
+        // This needs to be at the bottom of this list, because Key events (such as enter, when selecting a /command),
+        // should be handled before Enter handlers in other components like splitListItem
+        TrailingNode,
+      ],
+    },
   ];
 
   if (opts.collaboration) {
-    ret.push(
+    const group: BlockNoteExtensionGroup = {
+      group: "Collaboration",
+      required: true,
+      extensions: [],
+    };
+
+    group.extensions.push(
       Collaboration.configure({
         fragment: opts.collaboration.fragment,
       })
@@ -138,7 +181,7 @@ export const getBlockNoteExtensions = <BSchema extends BlockSchema>(opts: {
         cursor.insertBefore(nonbreakingSpace2, null);
         return cursor;
       };
-      ret.push(
+      group.extensions.push(
         CollaborationCursor.configure({
           user: opts.collaboration.user,
           render: opts.collaboration.renderCursor || defaultRender,
@@ -146,10 +189,48 @@ export const getBlockNoteExtensions = <BSchema extends BlockSchema>(opts: {
         })
       );
     }
+
+    ret.push(group);
   } else {
     // disable history extension when collaboration is enabled as Yjs takes care of undo / redo
-    ret.push(History);
+    ret.push({
+      group: "History",
+      required: false,
+      extensions: [History],
+    });
   }
 
+  // Editor extensions are always very last (for compatibility with old behaviour)
+  ret.push({
+    group: "Editor",
+    required: true,
+    extensions: [
+      Extension.create({
+        name: "BlockNoteUIExtension",
+
+        addProseMirrorPlugins: () => {
+          return [
+            opts.editor.sideMenu.plugin,
+            opts.editor.formattingToolbar.plugin,
+            opts.editor.slashMenu.plugin,
+            opts.editor.hyperlinkToolbar.plugin,
+            opts.editor.imageToolbar.plugin,
+          ];
+        },
+      }),
+    ],
+  });
+
   return ret;
+};
+
+/**
+ * Get all the Tiptap extensions BlockNote is configured with by default
+ */
+export const getBlockNoteExtensions = <BSchema extends BlockSchema>(
+  opts: GetExtensionsOptions<BSchema>
+) => {
+  return getBlockNoteExtensionGroups<BSchema>(opts).flatMap(
+    (group) => group.extensions
+  );
 };

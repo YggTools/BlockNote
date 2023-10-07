@@ -1,9 +1,12 @@
-import { Editor, EditorOptions, Extension } from "@tiptap/core";
+import { Extensions, Editor, EditorOptions } from "@tiptap/core";
 import { Node } from "prosemirror-model";
 // import "./blocknote.css";
 import { Editor as TiptapEditor } from "@tiptap/core/dist/packages/core/src/Editor";
 import * as Y from "yjs";
-import { getBlockNoteExtensions } from "./BlockNoteExtensions";
+import {
+  GetExtensionsOptions,
+  getBlockNoteExtensions,
+} from "./BlockNoteExtensions";
 import {
   insertBlocks,
   removeBlocks,
@@ -54,7 +57,25 @@ import { mergeCSSClasses } from "./shared/utils";
 
 export type BlockNoteEditorOptions<BSchema extends BlockSchema> = {
   // TODO: Figure out if enableBlockNoteExtensions/disableHistoryExtension are needed and document them.
+  /**
+   * @deprecated Use `getExtensions()` that returns an empty array instead.
+   */
   enableBlockNoteExtensions: boolean;
+
+  /**
+   * A callback function that is used to obtain the list of extensions to load.
+   *
+   * @default: `_tipTapOptions.extensions` + (if `enableBlockNoteExtensions` is set) all BlockNote extensions
+   *
+   * @param extensionOptions Parameters needed for initialization of some extensions. Can be passed directly to `getBlockNoteExtensions`.
+   * @param options The options object passed to the editor on construction.
+   * @returns An array of extensions to load. Note that `_tipTapOptions.extensions` must be manually returned!
+   */
+  getExtensions: (
+    extensionOptions: GetExtensionsOptions<BSchema>,
+    options: Partial<BlockNoteEditorOptions<BSchema>>
+  ) => Extensions;
+
   /**
    *
    * (couldn't fix any type, see https://github.com/TypeCellOS/BlockNote/pull/191#discussion_r1210708771)
@@ -191,27 +212,30 @@ export class BlockNoteEditor<BSchema extends BlockSchema = DefaultBlockSchema> {
     this.hyperlinkToolbar = new HyperlinkToolbarProsemirrorPlugin(this);
     this.imageToolbar = new ImageToolbarProsemirrorPlugin(this);
 
-    const extensions = getBlockNoteExtensions<BSchema>({
+    const extensionOptions: GetExtensionsOptions<BSchema> = {
       editor: this,
       domAttributes: newOptions.domAttributes || {},
       blockSchema: newOptions.blockSchema,
       collaboration: newOptions.collaboration,
-    });
+    };
 
-    const blockNoteUIExtension = Extension.create({
-      name: "BlockNoteUIExtension",
-
-      addProseMirrorPlugins: () => {
-        return [
-          this.sideMenu.plugin,
-          this.formattingToolbar.plugin,
-          this.slashMenu.plugin,
-          this.hyperlinkToolbar.plugin,
-          this.imageToolbar.plugin,
-        ];
-      },
-    });
-    extensions.push(blockNoteUIExtension);
+    let extensions: Extensions;
+    if (newOptions.getExtensions) {
+      if (newOptions.enableBlockNoteExtensions === false) {
+        throw new Error(
+          "enableBlockNoteExtensions must not be 'false' if getExtensions() is implemented"
+        );
+      }
+      extensions = newOptions.getExtensions(extensionOptions, options);
+    } else {
+      extensions = [];
+      if (newOptions._tiptapOptions?.extensions) {
+        extensions.push(...newOptions._tiptapOptions.extensions);
+      }
+      if (newOptions.enableBlockNoteExtensions !== false) {
+        extensions.push(...getBlockNoteExtensions<BSchema>(extensionOptions));
+      }
+    }
 
     this.schema = newOptions.blockSchema;
 
@@ -280,10 +304,7 @@ export class BlockNoteEditor<BSchema extends BlockSchema = DefaultBlockSchema> {
         newOptions.onTextCursorPositionChange?.(this);
       },
       editable: options.editable === undefined ? true : options.editable,
-      extensions:
-        newOptions.enableBlockNoteExtensions === false
-          ? newOptions._tiptapOptions?.extensions
-          : [...(newOptions._tiptapOptions?.extensions || []), ...extensions],
+      extensions,
       editorProps: {
         attributes: {
           ...newOptions.domAttributes?.editor,
